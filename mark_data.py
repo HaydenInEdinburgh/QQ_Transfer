@@ -84,13 +84,13 @@ class SeleniumWeb:
         return '/html/body//div[@class="search-results"]/div[contains(@class, "no-search-results")]'
 
     def get_policies_from_list_xpath(self):
-        return '//form[@id="PolicyList"]/table[@class="subgrid"]/tbody/tr[contains(@class, "policyStatusEquals")]/td[contains(@class, "lob")]/div[2]'
+        return '//form[@id="PolicyList"]/table[@class="subgrid"]/tbody/tr[contains(@class, "policyStatusEquals")]/td[contains(@class, "lob")]/div[1]'
 
     def get_policy_premium_xpath(self):
         return '//section[@id="overview-panel"]//div[contains(@class, "policypremium")]'
 
     def get_policy_number_xpath(self):
-        return '//section[@id="overview-panel"]//div[contains(@class, "policyno")]'
+        return '/html/body//section[@id="overview-panel"]//label[text() = "Policy Number"]/following-sibling::div[contains(@class,"policyno")]'
 
     def get_policy_status_xpath(self, is_package = False):
         if is_package:
@@ -172,7 +172,7 @@ class SeleniumWeb:
         self.scroll(policy_element)
         policy_element.click()
 
-        time.sleep(3)
+        time.sleep(8)
         is_package = self.check_exists_by_id('PackagePolicyInfo')
 
         policy_number = self.driver.find_element_by_xpath(self.get_policy_number_xpath()).text
@@ -224,6 +224,7 @@ class SeleniumWeb:
     def mark_agent(self, value="12816"):
         agent_id_element = self.driver.find_element_by_name('AgentID')
         self.scroll(agent_id_element)
+        time.sleep(3)
         dropdown_agent = Select(agent_id_element)
         dropdown_agent.select_by_value(value)
         time.sleep(5)
@@ -253,21 +254,8 @@ def read_csv_data(csv_path):
     return rows
 
 
-def main():
-    param = Param()
-    '''
-    FireFox Driver
-    '''
-    driver = webdriver.Firefox(executable_path=param.driver_path)
-    print('Invoke Driver Successfully')
+def main(param, selenium_web):
 
-    driver.get(param.qq_index)
-    driver.maximize_window()
-
-    '''
-    Login
-    '''
-    selenium_web = SeleniumWeb(driver)
     selenium_web.login(param.login_email, param.login_password)
     print('Login Successfully')
     time.sleep(3)
@@ -328,9 +316,9 @@ def main():
         else:
             customer_rows[index]['If Exist'] = 0
             processed_cust_num_set.add(cust_num)
-            driver.get(param.qq_index)
+            selenium_web.driver.get(param.qq_index)
             time.sleep(5)
-            with open(processed_cust_num_file, 'ab') as f:
+            with open(param.processed_customer_number_path, 'ab') as f:
                 pickle.dump(cust_num, f)
             continue
 
@@ -343,7 +331,8 @@ def main():
             # Go to the policy tab
             policy_tab_url = selenium_web.access_policy_tab()
             time.sleep(5)
-            policy_number = len(selenium_web.access_policies(policy_tab_url))
+            policies = selenium_web.access_policies(policy_tab_url)
+            policy_number = len(selenium_web.access_policies(policy_tab_url)) if policies else 0
             if policy_number:
                 for index in range(policy_number):
                     policy_items = selenium_web.driver.find_elements_by_xpath(selenium_web.get_policies_from_list_xpath())
@@ -384,8 +373,6 @@ def main():
                     selenium_web.driver.get(policy_tab_url)
                     time.sleep(5)
 
-
-
             # # Get the Original Agent & CSR
             # original_agent = selenium_web.get_original_agent()
             # original_csr = selenium_web.get_original_csr()
@@ -408,7 +395,7 @@ def main():
             writer.writeheader()
             writer.writerow(customer_rows[index])
 
-        driver.get(param.qq_index)
+        selenium_web.driver.get(param.qq_index)
         time.sleep(5)
         print(index)
 #        if index == 3:
@@ -417,13 +404,27 @@ def main():
 
 
 def mark():
+    param = Param()
+    '''
+    FireFox Driver
+    '''
+    driver = webdriver.Firefox(executable_path=param.driver_path)
+    print('Invoke Driver Successfully')
 
+    driver.get(param.qq_index)
+    driver.maximize_window()
+
+    '''
+    Login
+    '''
+    selenium_web = SeleniumWeb(driver)
     try:
-        main()
+        main(param, selenium_web)
     except Exception as e:
         print(e)
-
         send_email_to('pye3@wpi.edu')
+        selenium_web.driver.close()
+        mark()
 
 def send_email_to(toEmail):
     gmail_user = 'berniey@eigenanalytics.com'
